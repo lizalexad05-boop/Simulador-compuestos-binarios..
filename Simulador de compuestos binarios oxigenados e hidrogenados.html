@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Simulador de compuestos binarios oxigenados e hidrogenados</title>
+<style>
+:root{--bg:#f6f7fb;--card:#fff;--tx:#1b2030;--mut:#5b6478;--bd:#dfe3ee;--ac:#2563eb;--ok:#15803d;--okb:#dcfce7;--no:#b91c1c;--nob:#fee2e2;--cv:#0f172a;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1220;--card:#171c2e;--tx:#eef1fa;--mut:#9aa4bd;--bd:#2a3150;--ac:#6ea0ff;--ok:#4ade80;--okb:#12301f;--no:#f87171;--nob:#3a1717;--cv:#080b16}}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.45}
+.wrap{max-width:980px;margin:0 auto;padding:14px}
+h1{font-size:1.35rem;margin:6px 0 2px}
+.sub{color:var(--mut);margin:0 0 12px;font-size:.92rem}
+.tabs{display:flex;gap:6px;margin-bottom:12px}
+.tab,.btn,.chip{font:inherit;border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:10px;padding:8px 14px;cursor:pointer}
+.tab.on,.chip.on{background:var(--ac);border-color:var(--ac);color:#fff}
+.chip{padding:5px 11px;font-size:.88rem;border-radius:99px}
+.grid{display:grid;grid-template-columns:1fr 300px;gap:12px}
+@media(max-width:760px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:12px}
+canvas{width:100%;height:auto;aspect-ratio:3/2;background:var(--cv);border-radius:10px;touch-action:none;display:block}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:8px 0}
+.mol{display:flex;flex-wrap:wrap;gap:6px}
+.eq{font-size:1.1rem;font-weight:600;margin:6px 0;color:var(--ac)}
+.info dt{color:var(--mut);font-size:.8rem;margin-top:8px}
+.info dd{margin:0;font-weight:500}
+.leg{display:flex;gap:10px;flex-wrap:wrap;font-size:.85rem;color:var(--mut)}
+.dot{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:4px;vertical-align:-1px;border:1px solid #8884}
+input[type=range]{flex:1;min-width:120px}
+.stage{font-size:.88rem;color:var(--mut);min-height:1.3em}
+.q{margin-bottom:14px}.q p{font-weight:600;margin:0 0 8px}
+.opt{display:block;width:100%;text-align:left;margin:5px 0}
+.opt.ok{background:var(--okb);border-color:var(--ok)}.opt.no{background:var(--nob);border-color:var(--no)}
+.fb{font-size:.9rem;margin-top:4px;color:var(--mut)}
+.score{font-size:1.1rem;font-weight:700}
+.hide{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>⚛️ Simulador de compuestos binarios</h1>
+<p class="sub">Explora moléculas oxigenadas (óxidos) e hidrogenadas (hidruros), observa cómo se forman y pon a prueba lo aprendido.</p>
+<div class="tabs"><button class="tab on" id="t1">Simulador</button><button class="tab" id="t2">Evaluación (5 preguntas)</button></div>
+
+<section id="sim">
+<div class="row" id="filters"></div>
+<div class="grid">
+<div class="card">
+<canvas id="cv" width="720" height="480"></canvas>
+<div class="row">
+<button class="btn" id="play">▶ Ver formación</button>
+<input type="range" id="sl" min="0" max="100" value="100" aria-label="Progreso de formación">
+<label style="font-size:.88rem"><input type="checkbox" id="rot" checked> Girar</label>
+</div>
+<div class="stage" id="stage"></div>
+<div class="leg" id="leg"></div>
+<div class="stage">Arrastra sobre la molécula para rotarla.</div>
+</div>
+<div class="card">
+<div class="mol" id="mols"></div>
+<h2 id="nm" style="font-size:1.1rem;margin:12px 0 0"></h2>
+<div class="eq" id="eq"></div>
+<dl class="info" id="inf"></dl>
+</div>
+</div>
+</section>
+
+<section id="quiz" class="hide card">
+<div id="qs"></div>
+<div class="row"><span class="score" id="sc"></span><button class="btn" id="rs">Reiniciar</button></div>
+</section>
+</div>
+
+<script>
+const COL={H:['#ffffff','#bfc7d6',16],C:['#6b7280','#1f2937',26],N:['#60a5fa','#1d4ed8',25],O:['#f87171','#b91c1c',24],S:['#fde047','#a16207',32],Cl:['#86efac','#15803d',30],F:['#bef264','#4d7c0f',20]};
+const NAMES={H:'Hidrógeno',C:'Carbono',N:'Nitrógeno',O:'Oxígeno',S:'Azufre',Cl:'Cloro',F:'Flúor'};
+const D=[
+{f:'H₂O',n:'Agua (óxido de hidrógeno)',tags:['O','H'],eq:'2 H₂ + O₂ → 2 H₂O',geo:'Angular (≈104,5°)',en:'2 enlaces simples O–H',pol:'Polar',
+ a:[['O',0,.3,0],['H',-.76,-.3,0],['H',.76,-.3,0]],b:[[0,1,1],[0,2,1]]},
+{f:'CO₂',n:'Dióxido de carbono',tags:['O'],eq:'C + O₂ → CO₂',geo:'Lineal (180°)',en:'2 enlaces dobles C=O',pol:'Apolar',
+ a:[['C',0,0,0],['O',-1.16,0,0],['O',1.16,0,0]],b:[[0,1,2],[0,2,2]]},
+{f:'CO',n:'Monóxido de carbono',tags:['O'],eq:'2 C + O₂ → 2 CO',geo:'Lineal (diatómica)',en:'1 enlace triple C≡O',pol:'Ligeramente polar',
+ a:[['C',-.56,0,0],['O',.56,0,0]],b:[[0,1,3]]},
+{f:'SO₂',n:'Dióxido de azufre',tags:['O'],eq:'S + O₂ → SO₂',geo:'Angular (≈119°)',en:'Enlaces S=O (con resonancia)',pol:'Polar',
+ a:[['S',0,.45,0],['O',-1.23,-.3,0],['O',1.23,-.3,0]],b:[[0,1,2],[0,2,2]]},
+{f:'SO₃',n:'Trióxido de azufre',tags:['O'],eq:'2 SO₂ + O₂ → 2 SO₃',geo:'Trigonal plana (120°)',en:'3 enlaces S=O (resonancia)',pol:'Apolar',
+ a:[['S',0,0,0],['O',1.43,0,0],['O',-.72,1.24,0],['O',-.72,-1.24,0]],b:[[0,1,2],[0,2,2],[0,3,2]]},
+{f:'NH₃',n:'Amoníaco (hidruro de nitrógeno)',tags:['H'],eq:'N₂ + 3 H₂ → 2 NH₃',geo:'Piramidal (≈107°)',en:'3 enlaces simples N–H',pol:'Polar',
+ a:[['N',0,.45,0],['H',.94,-.15,0],['H',-.47,-.15,.81],['H',-.47,-.15,-.81]],b:[[0,1,1],[0,2,1],[0,3,1]]},
+{f:'CH₄',n:'Metano (hidruro de carbono)',tags:['H'],eq:'C + 2 H₂ → CH₄',geo:'Tetraédrica (109,5°)',en:'4 enlaces simples C–H',pol:'Apolar',
+ a:[['C',0,0,0],['H',.63,.63,.63],['H',-.63,-.63,.63],['H',-.63,.63,-.63],['H',.63,-.63,-.63]],b:[[0,1,1],[0,2,1],[0,3,1],[0,4,1]]},
+{f:'H₂S',n:'Sulfuro de hidrógeno (ácido sulfhídrico)',tags:['H'],eq:'H₂ + S → H₂S',geo:'Angular (≈92°)',en:'2 enlaces simples S–H',pol:'Polar',
+ a:[['S',0,.5,0],['H',-.96,-.43,0],['H',.96,-.43,0]],b:[[0,1,1],[0,2,1]]},
+{f:'HCl',n:'Cloruro de hidrógeno (ácido clorhídrico)',tags:['H'],eq:'H₂ + Cl₂ → 2 HCl',geo:'Lineal (diatómica)',en:'1 enlace simple H–Cl',pol:'Polar',
+ a:[['H',-.7,0,0],['Cl',.7,0,0]],b:[[0,1,1]]},
+{f:'HF',n:'Fluoruro de hidrógeno (ácido fluorhídrico)',tags:['H'],eq:'H₂ + F₂ → 2 HF',geo:'Lineal (diatómica)',en:'1 enlace simple H–F',pol:'Muy polar',
+ a:[['H',-.5,0,0],['F',.5,0,0]],b:[[0,1,1]]}
+];
+const $=id=>document.getElementById(id),cv=$('cv'),cx=cv.getContext('2d');
+let cur=D[0],filter='all',form=1,playing=false,ax=-.25,ay=.5,drag=false,lx=0,ly=0,last=0;
+const ease=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+
+function startPos(i,n){const a=i/n*Math.PI*2+.7;return[Math.cos(a)*2.8,Math.sin(a)*1.6,Math.sin(a*2)*1.2]}
+function build(){
+ const m=$('mols');m.innerHTML='';
+ D.filter(d=>filter=='all'||d.tags.includes(filter)).forEach(d=>{
+  const b=document.createElement('button');b.className='chip'+(d===cur?' on':'');b.innerHTML=d.f;
+  b.onclick=()=>{cur=d;build();replay()};m.appendChild(b)});
+ $('nm').textContent=cur.n;$('eq').innerHTML=cur.eq;
+ const els=[...new Set(cur.a.map(x=>x[0]))];
+ const cnt=cur.a.reduce((o,x)=>(o[x[0]]=(o[x[0]]||0)+1,o),{});
+ $('inf').innerHTML=`<dt>Composición</dt><dd>${els.map(e=>cnt[e]+' '+NAMES[e]).join(' + ')}</dd><dt>Enlaces</dt><dd>${cur.en}</dd><dt>Geometría</dt><dd>${cur.geo}</dd><dt>Polaridad</dt><dd>${cur.pol}</dd><dt>Tipo</dt><dd>Covalente (no metal + no metal)</dd>`;
+ $('leg').innerHTML=els.map(e=>`<span><i class="dot" style="background:${COL[e][0]}"></i>${NAMES[e]} (${e})</span>`).join('');
+}
+function replay(){form=0;playing=true;$('play').textContent='⏸ Formando…'}
+function pt(p){ // rotate
+ let[x,y,z]=p;const c=Math.cos(ay),s=Math.sin(ay);[x,z]=[x*c+z*s,-x*s+z*c];
+ const c2=Math.cos(ax),s2=Math.sin(ax);[y,z]=[y*c2-z*s2,y*s2+z*c2];return[x,y,z]}
+function draw(){
+ const W=cv.width,H=cv.height,S=105;cx.clearRect(0,0,W,H);
+ const e=ease(form),n=cur.a.length;
+ const P=cur.a.map((a,i)=>{const s=startPos(i,n);const f=[a[1],a[2],a[3]];
+  const q=[s[0]+(f[0]-s[0])*e,s[1]+(f[1]-s[1])*e,s[2]+(f[2]-s[2])*e];return pt(q)});
+ const ba=Math.max(0,Math.min(1,(form-.7)/.3));
+ cur.b.forEach(([i,j,o])=>{if(ba<=0)return;const A=P[i],B=P[j];
+  const dx=B[0]-A[0],dy=B[1]-A[1],L=Math.hypot(dx,dy)||1,nx=-dy/L,ny=dx/L;
+  cx.globalAlpha=ba;cx.strokeStyle='#cbd5e1';cx.lineWidth=5;cx.lineCap='round';
+  for(let k=0;k<o;k++){const off=(k-(o-1)/2)*11;
+   cx.beginPath();cx.moveTo(W/2+A[0]*S+nx*off,H/2+A[1]*S+ny*off);cx.lineTo(W/2+B[0]*S+nx*off,H/2+B[1]*S+ny*off);cx.stroke()}
+  cx.globalAlpha=1});
+ cur.a.map((a,i)=>({a,p:P[i]})).sort((u,v)=>u.p[2]-v.p[2]).forEach(({a,p})=>{
+  const[c1,c2,r0]=COL[a[0]],k=1+p[2]*.06,r=r0*1.35*k,x=W/2+p[0]*S,y=H/2+p[1]*S;
+  const g=cx.createRadialGradient(x-r*.35,y-r*.35,r*.1,x,y,r);g.addColorStop(0,c1);g.addColorStop(1,c2);
+  cx.fillStyle=g;cx.beginPath();cx.arc(x,y,r,0,7);cx.fill();
+  cx.fillStyle=a[0]=='H'||a[0]=='S'?'#111':'#fff';cx.font='bold '+Math.round(r*.8)+'px system-ui';
+  cx.textAlign='center';cx.textBaseline='middle';cx.fillText(a[0],x,y+1)});
+ $('stage').textContent=form<.35?'1) Átomos separados: se acercan entre sí':form<.7?'2) Los átomos se aproximan y comparten electrones':form<1?'3) Se forman los enlaces covalentes':'✔ Molécula formada: '+cur.f;
+}
+function loop(t){const dt=Math.min(.05,(t-last)/1000||0);last=t;
+ if(playing){form=Math.min(1,form+dt/3.5);if(form>=1){playing=false;$('play').textContent='▶ Ver formación'}$('sl').value=form*100}
+ if($('rot').checked&&!drag)ay+=dt*.6;draw();requestAnimationFrame(loop)}
+$('play').onclick=()=>{replay()};
+$('sl').oninput=e=>{playing=false;form=e.target.value/100;$('play').textContent='▶ Ver formación'};
+cv.onpointerdown=e=>{drag=true;lx=e.clientX;ly=e.clientY;cv.setPointerCapture(e.pointerId)};
+cv.onpointermove=e=>{if(!drag)return;ay+=(e.clientX-lx)*.01;ax+=(e.clientY-ly)*.01;lx=e.clientX;ly=e.clientY};
+cv.onpointerup=()=>drag=false;
+[['all','Todos'],['O','Oxigenados'],['H','Hidrogenados']].forEach(([k,l])=>{
+ const b=document.createElement('button');b.className='chip'+(k=='all'?' on':'');b.textContent=l;
+ b.onclick=()=>{filter=k;[...$('filters').children].forEach(c=>c.classList.toggle('on',c===b));build()};$('filters').appendChild(b)});
+
+// Quiz
+const Q=[
+{q:'¿Cuál de estos compuestos es binario?',o:['H₂SO₄','CO₂','NaOH','HNO₃'],c:1,e:'Un compuesto binario tiene solo dos elementos distintos. CO₂ tiene C y O; los otros tienen tres elementos.'},
+{q:'¿Cuál de estos compuestos es un compuesto hidrogenado (hidruro)?',o:['CO₂','SO₃','NH₃','CO'],c:2,e:'Un compuesto hidrogenado combina hidrógeno con otro elemento. NH₃ tiene N e H; los demás son oxigenados.'},
+{q:'El compuesto binario CO es oxigenado. ¿Cuál es su nombre?',o:['Monóxido de carbono','Dióxido de carbono','Carburo de oxígeno','Carbonato'],c:0,e:'Tiene 1 átomo de oxígeno, por eso el prefijo «mono»: monóxido de carbono.'},
+{q:'¿Cuál es el nombre sistemático (IUPAC) del NH₃?',o:['Amoníaco','Trihidruro de nitrógeno','Hidróxido de amonio','Nitruro de hidrógeno'],c:1,e:'Con prefijos: 3 hidrógenos → trihidruro de nitrógeno. «Amoníaco» es el nombre común aceptado (el sistemático puro es azano).'},
+{q:'¿Cuál es el nombre IUPAC del SO₃?',o:['Dióxido de azufre','Óxido sulfhídrico','Sulfato de oxígeno','Trióxido de azufre'],c:3,e:'Tiene 3 oxígenos: trióxido de azufre. El dióxido de azufre es SO₂.'}];
+let score=0,ans=0;
+function quiz(){score=0;ans=0;$('qs').innerHTML='';$('sc').textContent='Puntaje: 0 / 5';
+ Q.forEach((q,i)=>{const d=document.createElement('div');d.className='q';d.innerHTML=`<p>${i+1}. ${q.q}</p>`;
+  const f=document.createElement('div');f.className='fb';
+  q.o.forEach((t,j)=>{const b=document.createElement('button');b.className='btn opt';b.innerHTML=t;
+   b.onclick=()=>{if(d.dataset.done)return;d.dataset.done=1;ans++;
+    [...d.querySelectorAll('.opt')].forEach((x,k)=>{if(k==q.c)x.classList.add('ok')});
+    if(j==q.c){score++;f.textContent='✔ ¡Correcto! '+q.e}else{b.classList.add('no');f.textContent='✘ Incorrecto. '+q.e}
+    $('sc').textContent='Puntaje: '+score+' / 5'+(ans==5?(score==5?' 🏆 ¡Excelente!':score>=3?' 👍 Bien hecho':' 📘 Repasa en el simulador'):'')};
+   d.appendChild(b)});d.appendChild(f);$('qs').appendChild(d)})}
+$('rs').onclick=quiz;quiz();
+$('t1').onclick=()=>{$('sim').classList.remove('hide');$('quiz').classList.add('hide');$('t1').classList.add('on');$('t2').classList.remove('on')};
+$('t2').onclick=()=>{$('quiz').classList.remove('hide');$('sim').classList.add('hide');$('t2').classList.add('on');$('t1').classList.remove('on')};
+build();replay();requestAnimationFrame(loop);
+</script>
+</body>
+</html>
